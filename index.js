@@ -32,7 +32,7 @@ const lcInitConfig_1 = require("./logicController/lcInitConfig");
 exports.server = new tsrpc_1.WsServer(serviceProto_1.serviceProto, {
     heartbeatWaitTime: 247000,
     logMsg: false,
-    port: 3000,
+    port: 3001,
     json: true
 });
 async function init() {

@@ -92,6 +92,16 @@ class addresRole {
             throw new Error(`selectBlockInfoByHeight-failed: ${error}`);
         }
     }
+    static async selectAddresRoleOnEquipmentListByAddres(db, addres, blockID) {
+        try {
+            // return await db.get<RoleData | undefined>('select * from addresRole a inner join equipmentList e on a.addres = e.ownerAddres where a.addres=? and e.blockID=? and e.isTrading="0"', addres,blockID);
+            const sql = `select a.addres,a.grain,a.wood,a.ironOre,a.warrior,a.silverCoin,a.refinedIron,e.ownerAddres,a.equipment1,a.equipment2,a.equipment3,a.equipment4,a.equipment5,a.equipment6,a.equipment7,a.equipment8,e.equipmentType,e.equipmentValueType,e.equipmentValue from addresRole a inner join equipmentList e on a.addres = e.ownerAddres where a.addres='${addres}' and e.blockID='${blockID}' and e.isTrading='0' AND NOT (a.equipment1  = '${blockID}' OR a.equipment2 = '${blockID}' OR a.equipment3 = '${blockID}' OR a.equipment4 = '${blockID}' OR a.equipment5 = '${blockID}' OR a.equipment6 = '${blockID}' OR a.equipment7 = '${blockID}' OR a.equipment8 = '${blockID}')`;
+            return await db.all(sql);
+        }
+        catch (error) {
+            throw new Error(`selectAddresRoleOnEquipmentListByAddres-failed: ${error}`);
+        }
+    }
     static async selectARHeroListByAddresses(db, defenderAddres, attackerAddres) {
         try {
             const orderCases = `
@@ -108,6 +118,16 @@ class addresRole {
         }
         catch (error) {
             throw new Error(`selectHeroListByAddresses-failed: ${error}`);
+        }
+    }
+    static async selectAR_AI(db, addresses) {
+        try {
+            const addressValues = addresses.map(addr => `'${addr}'`).join(',');
+            const sql = `select addres,grain,wood,ironOre,warrior,grainLevel,woodLevel,ironOreLevel,warriorLevel,silverCoin from addresRole WHERE addres IN(${addressValues})`;
+            return await db.all(sql);
+        }
+        catch (error) {
+            throw new Error(`selectAR_AI-failed: ${error}`);
         }
     }
     static async selectARHeroListByArrayAddres(db, addresses) {
@@ -195,7 +215,7 @@ class addresRole {
     }
     static async updateARbySendResource(db, resourceType, srcAddres, dstAddres, srcAmount) {
         try {
-            let sql1 = `UPDATE addresRole SET ${resourceType} = CAST(${resourceType} AS INTEGER) - ${srcAmount} WHERE addres = '${srcAddres}' AND (CAST(${resourceType} AS INTEGER)) >= ${srcAmount}`;
+            let sql1 = `UPDATE addresRole SET ${resourceType} = CAST(${resourceType} AS INTEGER) - ${srcAmount} WHERE addres = '${srcAddres}' AND (CAST(${resourceType} AS INTEGER)) >= ${srcAmount} AND EXISTS (SELECT 1 FROM addresRole WHERE addres = '${dstAddres}')`;
             await db.run(sql1).then(async (result) => {
                 const updatedRows = (result.changes != null) ? result.changes : 0; //2026-01-29
                 const upRows = updatedRows > 0 ? 1 : 0;

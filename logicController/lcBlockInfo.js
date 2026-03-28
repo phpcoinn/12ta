@@ -138,6 +138,43 @@ class lcBlockInfo {
             server.broadcastMsg('Chat', sendChatConst);
         }).catch((error) => { console.error(error); });
     }
+    static processEquipmentData(list) {
+        const equipmentList = [];
+        const otherList = [];
+        list.forEach(item => {
+            try {
+                const msg = JSON.parse(item.message);
+                if (msg.op === 'setEquipment') {
+                    equipmentList.push(item);
+                }
+                else {
+                    otherList.push(item);
+                }
+            }
+            catch (_a) {
+                otherList.push(item);
+            }
+        });
+        const tickMap = new Map();
+        equipmentList.forEach(tx => {
+            try {
+                const msg = JSON.parse(tx.message);
+                const tick = msg.tick;
+                const currentTime = Number(tx.date);
+                if (!tickMap.has(tick)) {
+                    tickMap.set(tick, tx);
+                }
+                else {
+                    const existing = tickMap.get(tick);
+                    if (currentTime < Number(existing.date)) {
+                        tickMap.set(tick, tx);
+                    }
+                }
+            }
+            catch (_a) { }
+        });
+        return [...otherList, ...Array.from(tickMap.values())];
+    }
     static async addBlockInfo(server, currentConn, db, indexStartPay, addres, objStockholder, id, height, date, content) {
         let historyNum = Number(height) % 2000;
         if (historyNum == 0) {
@@ -190,6 +227,8 @@ class lcBlockInfo {
             }
         }
         addBlockJson.data = this.sortTransactionsByDate(updateData);
+        let procesData = this.processEquipmentData(addBlockJson.data);
+        addBlockJson.data = procesData;
         const updateContentString = JSON.stringify(addBlockJson);
         if (updateData.length > 0) {
             await conSQLConfig_1.conSQLConfig.addBlockInfo(db, {
@@ -334,77 +373,79 @@ class lcBlockInfo {
                             }
                             else if (dstData == objStockholder.stockholderEquipment && (messageDataJsonop == "makeEquipment" || messageDataJsonop == "setEquipment")) {
                                 if (this.isObjGasMoney(objGasMoney.makeEquipment, dstMoney)) {
-                                    await conSQLConfig_1.conSQLConfig.selectAddresRoleByAddres(db, srcDataAddres).then((result) => {
+                                    await conSQLConfig_1.conSQLConfig.selectAddresRoleOnEquipmentListByAddres(db, srcDataAddres, messageDataJson.tick).then((equipmentResult) => {
                                         let valueIsUndefined = true;
-                                        if (!result) {
+                                        if (equipmentResult.length == 0) {
                                             valueIsUndefined = false;
                                         }
+                                        const dataER = equipmentResult[0];
                                         if (valueIsUndefined) {
-                                            if (messageDataJson.op == "makeEquipment") {
-                                                let upgradeResult = [0, 0];
-                                                let moneyHeroSilverCoin = (60000 + (Math.floor((Number(height) - indexStartPay) / 525600) * 10000));
-                                                moneyHeroSilverCoin = moneyHeroSilverCoin >= 160000 ? 160000 : moneyHeroSilverCoin;
-                                                let moneyHeroRefinedIron = (100 + (Math.floor((Number(height) - indexStartPay) / 525600) * 10));
-                                                moneyHeroRefinedIron = moneyHeroRefinedIron >= 200 ? 200 : moneyHeroRefinedIron;
-                                                if (parseInt(result.silverCoin) >= moneyHeroSilverCoin) {
-                                                    upgradeResult[0] = 1;
+                                            if (messageDataJson.op == "setEquipment") {
+                                                let newEquipmentHash = messageDataJson.tick.slice();
+                                                let pastEquipmentHash = "";
+                                                if (dataER.equipmentType == "0") {
+                                                    pastEquipmentHash = dataER.equipment1;
                                                 }
-                                                if (parseInt(result.refinedIron) >= moneyHeroRefinedIron) {
-                                                    upgradeResult[1] = 1;
+                                                else if (dataER.equipmentType == "1") {
+                                                    pastEquipmentHash = dataER.equipment2;
                                                 }
-                                                if ((upgradeResult[0] + upgradeResult[1]) == 2) {
-                                                    let equipmentToData = lcInitConfig_1.lcInitConfig.equipmentCalculatedValue(addBlockJson.data[i].id, addBlockJson.id);
-                                                    let equipmentValueData = equipmentToData.split("_");
-                                                    lcInitConfig_1.lcInitConfig.updateARbyAddresToCreateEquipmentExpend(db, moneyHeroSilverCoin + "", moneyHeroRefinedIron + "", srcDataAddres).then((result) => {
-                                                        if (result !== undefined && result > 0) {
-                                                            lcInitConfig_1.lcInitConfig.addEquipmentList(server, db, addBlockJson.id, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, srcDataAddres, equipmentValueData[0], equipmentValueData[1], equipmentValueData[2], "", "", "0", "0", "");
-                                                        }
+                                                else if (dataER.equipmentType == "2") {
+                                                    pastEquipmentHash = dataER.equipment3;
+                                                }
+                                                else if (dataER.equipmentType == "3") {
+                                                    pastEquipmentHash = dataER.equipment4;
+                                                }
+                                                else if (dataER.equipmentType == "4") {
+                                                    pastEquipmentHash = dataER.equipment5;
+                                                }
+                                                else if (dataER.equipmentType == "5") {
+                                                    pastEquipmentHash = dataER.equipment6;
+                                                }
+                                                else if (dataER.equipmentType == "6") {
+                                                    pastEquipmentHash = dataER.equipment7;
+                                                }
+                                                else if (dataER.equipmentType == "7") {
+                                                    pastEquipmentHash = dataER.equipment8;
+                                                }
+                                                let retNewRes = [newEquipmentHash, dataER.equipmentType, dataER.equipmentValueType, dataER.equipmentValue, pastEquipmentHash, dataER.ownerAddres];
+                                                if (retNewRes[4].length >= 38) {
+                                                    conSQLConfig_1.conSQLConfig.selectEquipmentListByEquipmentHash(db, retNewRes[4], srcDataAddres).then((pastRes) => {
+                                                        //
+                                                        lcInitConfig_1.lcInitConfig.updateARbyAddresToEquipmentPosition(db, srcDataAddres, newEquipmentHash, retNewRes[1], retNewRes[2], retNewRes[3], "+", pastRes.equipmentValueType, pastRes.equipmentValue, "-").then((result) => {
+                                                        }).catch((error) => { console.error(error); });
+                                                    });
+                                                }
+                                                else {
+                                                    //
+                                                    lcInitConfig_1.lcInitConfig.updateARbyAddresToEquipmentPosition(db, srcDataAddres, newEquipmentHash, retNewRes[1], retNewRes[2], retNewRes[3], "+", "", "", "").then((result) => {
                                                     }).catch((error) => { console.error(error); });
                                                 }
                                             }
-                                            else {
-                                                let newEquipmentHash = messageDataJson.tick.slice();
-                                                conSQLConfig_1.conSQLConfig.selectEquipmentListByEquipmentHash(db, newEquipmentHash, srcDataAddres).then((newRes) => {
-                                                    let pastEquipmentHash = "";
-                                                    if (newRes.equipmentType == "0") {
-                                                        pastEquipmentHash = result.equipment1;
+                                        }
+                                        else {
+                                            if (messageDataJson.op == "makeEquipment") {
+                                                conSQLConfig_1.conSQLConfig.selectAddresRoleByAddres(db, srcDataAddres).then((makeResult) => {
+                                                    let upgradeResult = [0, 0];
+                                                    let moneyHeroSilverCoin = (60000 + (Math.floor((Number(height) - indexStartPay) / 525600) * 10000));
+                                                    moneyHeroSilverCoin = moneyHeroSilverCoin >= 160000 ? 160000 : moneyHeroSilverCoin;
+                                                    let moneyHeroRefinedIron = (100 + (Math.floor((Number(height) - indexStartPay) / 525600) * 10));
+                                                    moneyHeroRefinedIron = moneyHeroRefinedIron >= 200 ? 200 : moneyHeroRefinedIron;
+                                                    if (parseInt(makeResult.silverCoin) >= moneyHeroSilverCoin) {
+                                                        upgradeResult[0] = 1;
                                                     }
-                                                    else if (newRes.equipmentType == "1") {
-                                                        pastEquipmentHash = result.equipment2;
+                                                    if (parseInt(makeResult.refinedIron) >= moneyHeroRefinedIron) {
+                                                        upgradeResult[1] = 1;
                                                     }
-                                                    else if (newRes.equipmentType == "2") {
-                                                        pastEquipmentHash = result.equipment3;
-                                                    }
-                                                    else if (newRes.equipmentType == "3") {
-                                                        pastEquipmentHash = result.equipment4;
-                                                    }
-                                                    else if (newRes.equipmentType == "4") {
-                                                        pastEquipmentHash = result.equipment5;
-                                                    }
-                                                    else if (newRes.equipmentType == "5") {
-                                                        pastEquipmentHash = result.equipment6;
-                                                    }
-                                                    else if (newRes.equipmentType == "6") {
-                                                        pastEquipmentHash = result.equipment7;
-                                                    }
-                                                    else if (newRes.equipmentType == "7") {
-                                                        pastEquipmentHash = result.equipment8;
-                                                    }
-                                                    return [newEquipmentHash, newRes.equipmentType, newRes.equipmentValueType, newRes.equipmentValue, pastEquipmentHash, newRes.ownerAddres];
-                                                }).then((retNewRes) => {
-                                                    if (retNewRes[4].length >= 38) {
-                                                        conSQLConfig_1.conSQLConfig.selectEquipmentListByEquipmentHash(db, retNewRes[4], srcDataAddres).then((pastRes) => {
-                                                            //
-                                                            lcInitConfig_1.lcInitConfig.updateARbyAddresToEquipmentPosition(db, srcDataAddres, newEquipmentHash, retNewRes[1], retNewRes[2], retNewRes[3], "+", pastRes.equipmentValueType, pastRes.equipmentValue, "-").then((result) => {
-                                                            }).catch((error) => { console.error(error); });
-                                                        });
-                                                    }
-                                                    else {
-                                                        //
-                                                        lcInitConfig_1.lcInitConfig.updateARbyAddresToEquipmentPosition(db, srcDataAddres, newEquipmentHash, retNewRes[1], retNewRes[2], retNewRes[3], "+", "", "", "").then((result) => {
+                                                    if ((upgradeResult[0] + upgradeResult[1]) == 2) {
+                                                        let equipmentToData = lcInitConfig_1.lcInitConfig.equipmentCalculatedValue(addBlockJson.data[i].id, addBlockJson.id);
+                                                        let equipmentValueData = equipmentToData.split("_");
+                                                        lcInitConfig_1.lcInitConfig.updateARbyAddresToCreateEquipmentExpend(db, moneyHeroSilverCoin + "", moneyHeroRefinedIron + "", srcDataAddres).then((uResult) => {
+                                                            if (uResult !== undefined && uResult > 0) {
+                                                                lcInitConfig_1.lcInitConfig.addEquipmentList(server, db, addBlockJson.id, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, srcDataAddres, equipmentValueData[0], equipmentValueData[1], equipmentValueData[2], "", "", "0", "0", "");
+                                                            }
                                                         }).catch((error) => { console.error(error); });
                                                     }
-                                                });
+                                                }).catch((error) => { console.error(error); });
                                             }
                                         }
                                     }).catch((error) => { console.error(error); });
@@ -441,10 +482,13 @@ class lcBlockInfo {
                                                     const arData = await lcInitConfig_1.lcInitConfig.getARIsWarEquipment(db, srcDataAddres, messageDataJson.oh);
                                                     if (arData.length == 0) {
                                                         let equipmentDataValue = await lcInitConfig_1.lcInitConfig.getEquipmentListByEquipmentHashToEquipmentValue(db, messageDataJson.oh);
-                                                        if (equipmentDataValue.isTrading == "0") {
-                                                            let equipmentValue = equipmentDataValue.equipmentType + "," + equipmentDataValue.equipmentValueType + "," + equipmentDataValue.equipmentValue;
-                                                            lcInitConfig_1.lcInitConfig.updateEquipmentListByBlockIDUIsTrading(db, messageDataJson.oh, "1");
-                                                            lcInitConfig_1.lcInitConfig.addTradingList(server, db, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, messageDataJson.ot, "", "", "", "", "", "", "", messageDataJson.oh, equipmentValue, messageDataJson.sc, "0", "", "");
+                                                        //2026-03-27
+                                                        if (equipmentDataValue) {
+                                                            if (equipmentDataValue.isTrading == "0") {
+                                                                let equipmentValue = equipmentDataValue.equipmentType + "," + equipmentDataValue.equipmentValueType + "," + equipmentDataValue.equipmentValue;
+                                                                lcInitConfig_1.lcInitConfig.updateEquipmentListByBlockIDUIsTrading(db, messageDataJson.oh, "1");
+                                                                lcInitConfig_1.lcInitConfig.addTradingList(server, db, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, messageDataJson.ot, "", "", "", "", "", "", "", messageDataJson.oh, equipmentValue, messageDataJson.sc, "0", "", "");
+                                                            }
                                                         }
                                                     }
                                                     else {
@@ -457,12 +501,15 @@ class lcBlockInfo {
                                                     const arData = await lcInitConfig_1.lcInitConfig.getARIsWarHeroes(db, srcDataAddres, messageDataJson.oh);
                                                     if (arData.length == 0) {
                                                         const heroData = await lcInitConfig_1.lcInitConfig.getHeroListByHeroHashToHeroValue(db, messageDataJson.oh, srcDataAddres);
-                                                        if (heroData.isTrading == "0") {
-                                                            lcInitConfig_1.lcInitConfig.updateHeroListByBlockIDUIsTrading(db, messageDataJson.oh, "1");
-                                                            lcInitConfig_1.lcInitConfig.addTradingList(server, db, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, messageDataJson.ot, "", "", "", "", messageDataJson.oh, heroData.heroValue, messageDataJson.sc, "", "", "", "0", "", "");
-                                                        }
-                                                        else {
-                                                            console.log(messageDataJson.oh, "It has already been sold on the trading market.");
+                                                        //2026-03-27
+                                                        if (heroData) {
+                                                            if (heroData.isTrading == "0") {
+                                                                lcInitConfig_1.lcInitConfig.updateHeroListByBlockIDUIsTrading(db, messageDataJson.oh, "1");
+                                                                lcInitConfig_1.lcInitConfig.addTradingList(server, db, addBlockJson.height, addBlockJson.data[i].id, srcDataAddres, messageDataJson.ot, "", "", "", "", messageDataJson.oh, heroData.heroValue, messageDataJson.sc, "", "", "", "0", "", "");
+                                                            }
+                                                            else {
+                                                                console.log(messageDataJson.oh, "It has already been sold on the trading market.");
+                                                            }
                                                         }
                                                     }
                                                     else {

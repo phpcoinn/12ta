@@ -61,6 +61,9 @@ class conSQLConfig {
     static async selectAddresRoleByAddres(db, addres) {
         return addresRole_1.addresRole.selectAddresRoleByAddres(db, addres);
     }
+    static async selectAddresRoleOnEquipmentListByAddres(db, addres, blockID) {
+        return addresRole_1.addresRole.selectAddresRoleOnEquipmentListByAddres(db, addres, blockID);
+    }
     static async selectARHeroListByAddresses(db, defenderAddres, attackerAddres) {
         return addresRole_1.addresRole.selectARHeroListByAddresses(db, defenderAddres, attackerAddres);
     }

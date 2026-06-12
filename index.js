@@ -313,3 +313,16 @@ function executeEveryMinute() {
     exports.server.broadcastMsg('Chat', sendChatConst, [exports.server.connections[0]]);
 }
 main();
+const http = require('http');
+http.createServer((req, res) => {
+    if (req.url === '/api/online') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // Filter out clients with "home" === "0" (which might be the fast-sync client)
+        const count = exports.indexConnDataRecord.filter(c => c.online === "1").length;
+        res.end(JSON.stringify({ count: count }));
+    } else {
+        res.writeHead(404);
+        res.end();
+    }
+}).listen(3002);
